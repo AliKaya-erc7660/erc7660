@@ -1,0 +1,13 @@
+[profile.default]
+src = 'contracts'
+out = 'out'
+test = 'tcast/test'
+libs = ['node_modules', 'foundry/src']
+gas_reports = ["*"]
+optimizer = true
+cache_path  = 'cache'
+ffi = true
+fs_permissions = [{ access = "write", path = "./"}]
+ETHERSCAN_API_KEY = '82RIUXDWPYIZMDZ8I1D3WSYMX1E3H5II1U'
+[rpc_endpoints]
+bsc_testnet = "${ARBITRUM_TEST_RPC_URL}"
