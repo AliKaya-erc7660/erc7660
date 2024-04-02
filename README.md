@@ -130,7 +130,7 @@ unchecked {
 ## Reference Implementation
 
 ```solidity
-contract ERC9660 is Context,IERC20, IERC20Metadata,Ownable {
+contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
  mapping(address => uint256) private  _Owned;
  struct VestInfo {
   uint256 total;
