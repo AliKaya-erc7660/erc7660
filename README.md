@@ -164,29 +164,29 @@ contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
      * construction.
      */
  constructor(string memory name_, string memory symbol_) {
-  _name = name_;
-  _symbol = symbol_;
-  _Owned[_msgSender()] = _totalSupply;
-  _isExcludedVest[owner()] = true;
-  _isExcludedVest[address(this)] = true;
+     _name = name_;
+     _symbol = symbol_;
+     _Owned[_msgSender()] = _totalSupply;
+     _isExcludedVest[owner()] = true;
+     _isExcludedVest[address(this)] = true;
 
-  emit Transfer(address(0), _msgSender(), _totalSupply);
+     emit Transfer(address(0), _msgSender(), _totalSupply);
  }
 
  function setExcludedVest(address account,bool flag) public onlyOwner {
-  _isExcludedVest[account] = flag;
-  emit SetExcludedVest(msg.sender,flag);
+     _isExcludedVest[account] = flag;
+     emit SetExcludedVest(msg.sender,flag);
  }
 
  function setSwapRouter(address _swapRouter, bool flag) public onlyOwner {
-  _isSwapRouter[_swapRouter] = flag;
-  emit SetSwapRouter(msg.sender,_swapRouter, flag);
+     _isSwapRouter[_swapRouter] = flag;
+     emit SetSwapRouter(msg.sender,_swapRouter, flag);
  }
  /**
   * @dev Returns the name of the token.
      */
  function name() public view virtual override returns (string memory) {
-  return _name;
+    return _name;
  }
 
  /**
@@ -194,7 +194,7 @@ contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
      * name.
      */
  function symbol() public view virtual override returns (string memory) {
-  return _symbol;
+    return _symbol;
  }
 
  /**
@@ -211,22 +211,22 @@ contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
      * {IERC20-balanceOf} and {IERC20-transfer}.
      */
  function decimals() public view virtual override returns (uint8) {
-  return _decimal;
+     return _decimal;
  }
 
  /**
   * @dev See {IERC20-totalSupply}.
      */
  function totalSupply() public view virtual override returns (uint256) {
-  return _totalSupply;
+    return _totalSupply;
  }
 
  /**
   * @dev See {IERC20-balanceOf}.
      */
  function balanceOf(address account) public view virtual override returns (uint256) {
-  (, uint256 canRelease, ) = getCanReleaseInfo(account,true);
-  return _Owned[account] + canRelease;
+     (, uint256 canRelease, ) = getCanReleaseInfo(account,true);
+     return _Owned[account] + canRelease;
  }
 
  function getCanReleaseInfo(address account) public view returns (uint256 total, uint256 canRelease, uint256 released) {
