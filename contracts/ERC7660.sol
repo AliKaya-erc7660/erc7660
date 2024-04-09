@@ -224,69 +224,42 @@ contract Ownable is Context {
  * allowances. See {IERC20-approve}.
  */
 
-contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
-    mapping(address => uint256) private  _Owned;
-
+contract ERC7660 is IERC20, IERC20Metadata,Ownable {
+    mapping(address => uint256) private  _balances;
     struct VestInfo {
         uint256 total;
         uint256 released;
-        uint32 startTime;
-        uint32 updateTime;
+        uint32  startTime;
+        uint32  updateTime;
     }
 
     mapping(address => VestInfo[7]) public userVestInfo;
     mapping(address => uint256) public vestCursor;
 
     mapping(address => mapping(address => uint256)) private _allowances;
-    mapping(address => bool) private _isExcludedFrom;
-    mapping(address => bool) private _isExcludedTo;
+    mapping(address => bool) internal  _pairs;
+    mapping(address => bool) internal  _routers;
 
-    uint256 private _totalSupply = 1_000_000_000 * (10 ** 18);
-
+    uint256 private _totalSupply;
     string private _name;
     string private _symbol;
     uint8 private _decimal = 18;
-    uint256 public duration = 7* 60 * 60;
-    uint256 public period = duration / 7;
+
+    uint256 private duration = 7*24*3600;
+    uint256 private period = duration/7;
 
 
-    event SetExcludedTo(address sender,address account, bool flag);
-    event SetExcludedFrom(address sender,address account, bool flag);
-    event SetDuration(msg.sender, _duration);
-    /**
-     * @dev Sets the values for {name} and {symbol}.
-     *
-     * The default value of {decimals} is 18. To select a different value for
-     * {decimals} you should overload it.
-     *
-     * All two of these values are immutable: they can only be set once during
-     * construction.
-     */
-    constructor(string memory name_, string memory symbol_,uint256 totalSupply_) {
+
+    event AddPair(address sender,address account, bool flag);
+    event AddRouter(address sender,address account, bool flag);
+    event Trade(address from,address to,uint256 side,uint256 amount);
+
+    constructor(string memory name_, string memory symbol_, uint256 totalSupply_) {
         _name = name_;
         _symbol = symbol_;
         _totalSupply = totalSupply_;
-        _Owned[_msgSender()] = _totalSupply;
-        _isExcludedTo[owner()] = true;
-        _isExcludedTo[address(this)] = true;
-
+        _balances[_msgSender()] = _totalSupply;
         emit Transfer(address(0), _msgSender(), _totalSupply);
-    }
-
-    function _setExcludedTo(address account, bool flag) internal onlyOwner {
-        _isExcludedTo[account] = flag;
-        emit SetExcludedTo(msg.sender,account, flag);
-    }
-
-    function _setExcludedFrom(address account, bool flag) internal onlyOwner {
-        _isExcludedFrom[account] = flag;
-        emit SetExcludedFrom(msg.sender,account, flag);
-    }
-
-    function _setDuration(uint256 _duration) internal onlyOwner {
-        require(_duration !=0,'zero duration');
-        duration  = _duration;
-        emit SetDuration(msg.sender, _duration);
     }
     /**
      * @dev Returns the name of the token.
@@ -332,7 +305,7 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
      */
     function balanceOf(address account) public view virtual override returns (uint256) {
         (, uint256 canRelease,) = getCanReleaseInfo(account);
-        return _Owned[account] + canRelease;
+        return _balances[account] + canRelease;
     }
 
     /**
@@ -475,11 +448,10 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
 
-
         _beforeTokenTransfer(from, to, amount);
         _handleTokenTransfer(from, to, amount);
-        emit Transfer(from, to, amount);
         _afterTokenTransfer(from, to, amount);
+        emit Transfer(from, to, amount);
     }
 
 
@@ -552,7 +524,7 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
 
     }
 
-    function getCanReleaseInfo(address account) public view returns (uint256 total, uint256 canRelease, uint256 released) {
+    function getCanReleaseInfo(address account) internal view returns (uint256 total, uint256 canRelease, uint256 released) {
         for (uint i = 0; i < 7; i++) {
             VestInfo memory info = userVestInfo[account][i];
             if (info.startTime == 0) {
@@ -562,16 +534,16 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
             total += info.total;
             if (block.timestamp <= info.updateTime) {
                 canRelease += total;
-            } else if (uint32(block.timestamp) >= info.startTime + duration) {
+            } else if (uint128(block.timestamp) >= info.startTime + duration) {
                 canRelease += info.total - info.released;
             } else {
                 uint temp = info.total * (block.timestamp - info.startTime) / duration;
-                canRelease += temp - info.released;
+                canRelease = temp - info.released;
             }
         }
     }
 
-    function claimRelease(address account) public {
+    function claimRelease(address account) private {
         uint canReleaseTotal;
         for (uint i = 0; i < 7; i++) {
             VestInfo storage info = userVestInfo[account][i];
@@ -579,7 +551,7 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
                 continue;
             }
             uint canRelease;
-            if (uint32(block.timestamp) >= info.startTime + duration) {
+            if (uint128(block.timestamp) >= info.startTime + duration) {
                 canRelease = info.total - info.released;
             } else {
                 uint temp = info.total * (block.timestamp - info.startTime) / duration;
@@ -588,28 +560,27 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
             canReleaseTotal += canRelease;
             info.released += canRelease;
         }
+
         if (canReleaseTotal > 0) {
-            _Owned[account] += canReleaseTotal;
+            _balances[account] += canReleaseTotal;
         }
     }
 
     function _handleTokenTransfer(address from, address to, uint256 amount) internal virtual {
         claimRelease(from);
-        uint256 fromBalance = _Owned[from];
+        uint256 fromBalance = _balances[from];
         require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
-        unchecked {
-            _Owned[from] = fromBalance - amount;
-        }
-        //update to vestInfo
-        if(_isExcludedFrom[from]){
-            _Owned[to] += amount;
-        } else if (!_isExcludedVest[to]) {
+    unchecked {
+        _balances[from] = fromBalance - amount;
+    }
+        uint side = 0;
+        if (isPair(from) && !isRouter(to)){
             claimRelease(to);
+            side = 1 ; //buy
             uint startTime = block.timestamp / period * period;
             uint pos = vestCursor[to];
             VestInfo storage toInfo = userVestInfo[to][pos];
             if (toInfo.startTime != startTime) {
-                claimRelease(to);
                 if (pos == 6) {
                     pos = 0;
                 } else {
@@ -624,15 +595,41 @@ contract ERC7660 is Context, IERC20, IERC20Metadata, Ownable {
                 toInfo.total += amount;
             }
             toInfo.updateTime = uint32(block.timestamp);
+
         } else {
-            _Owned[to] += amount;
+            if(isPair(to)){
+                side = 2; //selll
+            }else{
+                side = 3; //other
+            }
+            _balances[to] += amount;
         }
+        emit Trade(from,to,side,amount);
     }
 
-    function isSameDayHour(address account)public view returns(bool){
-        return voteLastTime[account]/3600 * 3600 == block.timestamp /3600 * 3600;
+
+    function addPair(address _pair,bool flag) public onlyOwner {
+        require(_pair != address(0), "pair is zero address");
+        _pairs[_pair] = flag;
+        emit AddPair(msg.sender,_pair,flag);
+    }
+    //_routers
+    function addRouter(address _router,bool flag) public onlyOwner {
+        require(_router != address(0), "router is zero address");
+        _routers[_router] = flag;
+        emit AddRouter(msg.sender,_router,flag);
     }
 
+    function isPair(address _pair) public view returns (bool) {
+        return _pairs[_pair];
+    }
+    function isRouter(address _router) public view returns (bool) {
+        return _routers[_router];
+    }
+
+    function getDurationAndPeriod() public view returns(uint256,uint256){
+        return (duration,period);
+    }
 
     /**
      * @dev Hook that is called after any transfer of tokens. This includes
