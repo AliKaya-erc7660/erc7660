@@ -43,21 +43,14 @@ async function main() {
   console.log("the transfer tx is",transferTx);
 
 
-  //test contract
-  let rewardContract = ""
-  let setRewardContractExcluded = await ERCNewToken0.setExcludedTo(ethers.utils.getAddress(rewardContract),true);
-  console.log("the setRewardContractExcluded is ",setRewardContractExcluded);
-  let setRewardContractFromExcluded = await ERCNewToken0.setExcludedFrom(ethers.utils.getAddress(rewardContract),true);
-  console.log("the setRewardContractFromExcluded is ",setRewardContractFromExcluded);
+  //pair  && router contract
+  let pairContract = "0x4bd19CF5BC7D1277F8BdB93b89AcE41a7d30c401"//uniswap V3
+  let addPairTx = await ERC7660.addPair(ethers.utils.getAddress(pairContract),true);
+  console.log("the addPairTx is ",addPairTx);
+  let routerContract = ""
+  let addRouterTx = await ERC7660.addRouter(ethers.utils.getAddress(routerContract),true);
+  console.log("the addRouter is ",addRouterTx);
 
-  ////Uniswap Pair and router exclude lock
-  let pair = "0x4bd19CF5BC7D1277F8BdB93b89AcE41a7d30c401" //uniswap V3
-  let setExcludedVest = await ERCNewToken0.setExcludedTo(ethers.utils.getAddress(pair),true);
-   console.log("the setExcludedVest is ",setExcludedVest);
-
-  let  router = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"  //NonfungiblePositionManager
-  let setRouterExcludedVest = await ERCNewToken0.setExcludedTo(ethers.utils.getAddress(router),true);
-  console.log("the router setExcludedVest is ",setRouterExcludedVest);
   return;
 
 

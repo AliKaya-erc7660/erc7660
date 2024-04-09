@@ -66,42 +66,47 @@ There are four major improvements in this protocol:
 ```
 - Sorter && Low-cost swap Algorithm:
 ```solidity
-    function _handleTokenTransfer(address from, address to, uint256 amount,uint256 toAmount) internal virtual {
- claimRelease(from);
- uint256 fromBalance = _Owned[from];
- require(fromBalance >= amount, "ERC-20: transfer amount exceeds balance");
+   function _handleTokenTransfer(address from, address to, uint256 amount) internal virtual {
+  claimRelease(from);
+  uint256 fromBalance = _balances[from];
+  require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
 unchecked {
- _Owned[from] = fromBalance - amount;
+  _balances[from] = fromBalance - amount;
 }
- //update to vestInfo
- if (!_isExcludedVest[to]) {
-  claimRelease(to);
-  uint startTime = block.timestamp / period * period;
-  uint pos = vestCursor[to];
-  VestInfo storage toInfo = userVestInfo[to][pos];
-  if (toInfo.startTime != startTime) {
-   if (pos == 6) {
-    pos = 0;
-   } else {
-    ++pos;
-   }
-   toInfo = userVestInfo[to][pos];
-   toInfo.total = toAmount;
-   toInfo.released = 0;
-   toInfo.startTime = uint128(startTime);
-   vestCursor[to] = pos;
+  uint side = 0;
+  if (isPair(from) && !isRouter(to)){
+    claimRelease(to);
+    side = 1 ; //buy
+    uint startTime = block.timestamp / period * period;
+    uint pos = vestCursor[to];
+    VestInfo storage toInfo = userVestInfo[to][pos];
+    if (toInfo.startTime != startTime) {
+      if (pos == 6) {
+        pos = 0;
+      } else {
+        ++pos;
+      }
+      toInfo = userVestInfo[to][pos];
+      toInfo.total = amount;
+      toInfo.released = 0;
+      toInfo.startTime = uint32(startTime);
+      vestCursor[to] = pos;
+    } else {
+      toInfo.total += amount;
+    }
+    toInfo.updateTime = uint32(block.timestamp);
+
   } else {
-   toInfo.total += toAmount;
+    if(isPair(to)){
+      side = 2; //selll
+    }else{
+      side = 3; //other
+    }
+    _balances[to] += amount;
   }
-  toInfo.updateTime = uint128(block.timestamp);
- } else {
-  if(_isSwapRouter[to]){
-   _Owned[to] += amount;
-  }else{
-   _Owned[to] += toAmount;
-  }
- }
+  emit Trade(from,to,side,amount);
 }
+
 
  function claimRelease(address account) public {
   uint canReleaseTotal;
@@ -130,127 +135,214 @@ unchecked {
 ## Reference Implementation
 
 ```solidity
-contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
- mapping(address => uint256) private  _Owned;
- struct VestInfo {
-  uint256 total;
-  uint256 released;
-  uint256 startTime;
- }
- mapping(address => VestInfo[7]) public userVestInfo; //7 period
+contract ERC7660 is IERC20, IERC20Metadata,Ownable {
+  mapping(address => uint256) private  _balances;
+  struct VestInfo {
+    uint256 total;
+    uint256 released;
+    uint32  startTime;
+    uint32  updateTime;
+  }
+
+  mapping(address => VestInfo[7]) public userVestInfo;
+  mapping(address => uint256) public vestCursor;
+
+  mapping(address => mapping(address => uint256)) private _allowances;
+  mapping(address => bool) internal  _pairs;
+  mapping(address => bool) internal  _routers;
+
+  uint256 private _totalSupply;
+  string private _name;
+  string private _symbol;
+  uint8 private _decimal = 18;
+
+  uint256 private duration = 7*24*3600;
+  uint256 private period = duration/7;
 
 
- mapping(address => mapping(address => uint256)) private _allowances;
- mapping (address => bool) private _isExcludedVest;
- mapping(address => bool) private _isSwapRouter;
 
- uint256 private _totalSupply = 1_000_000_000*(10**18);
+  event AddPair(address sender,address account, bool flag);
+  event AddRouter(address sender,address account, bool flag);
+  event Trade(address from,address to,uint256 side,uint256 amount);
 
- string private _name;
- string private _symbol;
- uint8 private _decimal = 18;
- uint256 public duration = 7* 60 * 60; //test for 7 hour release
- uint256 public period = duration/7;
- event SetExcludedVest(address sender,bool flag);
- event SetSwapRouter(address sender,address swapRouter, bool flag);
-
- /**
-  * @dev Sets the values for {name} and {symbol}.
-     *
-     * The default value of {decimals} is 18. To select a different value for
-     * {decimals} you should overload it.
-     *
-     * All two of these values are immutable: they can only be set once during
-     * construction.
+  constructor(string memory name_, string memory symbol_, uint256 totalSupply_) {
+    _name = name_;
+    _symbol = symbol_;
+    _totalSupply = totalSupply_;
+    _balances[_msgSender()] = _totalSupply;
+    emit Transfer(address(0), _msgSender(), _totalSupply);
+  }
+  /**
+   * @dev Returns the name of the token.
      */
- constructor(string memory name_, string memory symbol_) {
-     _name = name_;
-     _symbol = symbol_;
-     _Owned[_msgSender()] = _totalSupply;
-     _isExcludedVest[owner()] = true;
-     _isExcludedVest[address(this)] = true;
-
-     emit Transfer(address(0), _msgSender(), _totalSupply);
- }
-
- function setExcludedVest(address account,bool flag) public onlyOwner {
-     _isExcludedVest[account] = flag;
-     emit SetExcludedVest(msg.sender,flag);
- }
-
- function setSwapRouter(address _swapRouter, bool flag) public onlyOwner {
-     _isSwapRouter[_swapRouter] = flag;
-     emit SetSwapRouter(msg.sender,_swapRouter, flag);
- }
- /**
-  * @dev Returns the name of the token.
-     */
- function name() public view virtual override returns (string memory) {
+  function name() public view virtual override returns (string memory) {
     return _name;
- }
+  }
 
- /**
-  * @dev Returns the symbol of the token, usually a shorter version of the
+  /**
+   * @dev Returns the symbol of the token, usually a shorter version of the
      * name.
      */
- function symbol() public view virtual override returns (string memory) {
+  function symbol() public view virtual override returns (string memory) {
     return _symbol;
- }
+  }
 
- /**
-  * @dev Returns the number of decimals used to get its user representation.
+  /**
+   * @dev Returns the number of decimals used to get its user representation.
      * For example, if `decimals` equals `2`, a balance of `505` tokens should
      * be displayed to a user as `5.05` (`505 / 10 ** 2`).
      *
      * Tokens usually opt for a value of 18, imitating the relationship between
-     * Ether and Wei. This is the value {ERC-20} uses, unless this function is
+     * Ether and Wei. This is the value {ERC20} uses, unless this function is
      * overridden;
      *
      * NOTE: This information is only used for _display_ purposes: it in
      * no way affects any of the arithmetic of the contract, including
      * {IERC20-balanceOf} and {IERC20-transfer}.
      */
- function decimals() public view virtual override returns (uint8) {
-     return _decimal;
- }
-
- /**
-  * @dev See {IERC20-totalSupply}.
-     */
- function totalSupply() public view virtual override returns (uint256) {
-    return _totalSupply;
- }
-
- /**
-  * @dev See {IERC20-balanceOf}.
-     */
- function balanceOf(address account) public view virtual override returns (uint256) {
-     (, uint256 canRelease, ) = getCanReleaseInfo(account,true);
-     return _Owned[account] + canRelease;
- }
-
- function getCanReleaseInfo(address account) public view returns (uint256 total, uint256 canRelease, uint256 released) {
-  for (uint i = 0; i < 7; i++) {
-   VestInfo memory info = userVestInfo[account][i];
-   if (info.startTime == 0) {
-    continue;
-   }
-   released += info.released;
-   total += info.total;
-   if (block.timestamp <= info.updateTime) {
-    canRelease += (total*100/userRation);
-   } else if (uint128(block.timestamp) >= info.startTime + duration) {
-    canRelease += info.total - info.released;
-   } else {
-    uint temp = info.total * (block.timestamp - info.startTime) / duration;
-    canRelease += temp - info.released;
-   }
+  function decimals() public view virtual override returns (uint8) {
+    return _decimal;
   }
- }
 
+  /**
+   * @dev See {IERC20-totalSupply}.
+     */
+  function totalSupply() public view virtual override returns (uint256) {
+    return _totalSupply;
+  }
 
- /**
-  * @dev Moves `amount` of tokens from `from` to `to`.
+  /**
+   * @dev See {IERC20-balanceOf}.
+     */
+  function balanceOf(address account) public view virtual override returns (uint256) {
+    (, uint256 canRelease,) = getCanReleaseInfo(account);
+    return _balances[account] + canRelease;
+  }
+
+  /**
+   * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `to` cannot be the zero address.
+     * - the caller must have a balance of at least `amount`.
+     */
+  function transfer(address to, uint256 amount) public virtual override returns (bool) {
+    address owner = _msgSender();
+    _transfer(owner, to, amount);
+    return true;
+  }
+
+  /**
+   * @dev See {IERC20-allowance}.
+     */
+  function allowance(
+    address owner,
+    address spender
+  ) public view virtual override returns (uint256) {
+    return _allowances[owner][spender];
+  }
+
+  /**
+   * @dev See {IERC20-approve}.
+     *
+     * NOTE: If `amount` is the maximum `uint256`, the allowance is not updated on
+     * `transferFrom`. This is semantically equivalent to an infinite approval.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+  function approve(
+    address spender,
+    uint256 amount
+  ) public virtual override returns (bool) {
+    address owner = _msgSender();
+    _approve(owner, spender, amount);
+    return true;
+  }
+
+  /**
+   * @dev See {IERC20-transferFrom}.
+     *
+     * Emits an {Approval} event indicating the updated allowance. This is not
+     * required by the EIP. See the note at the beginning of {ERC20}.
+     *
+     * NOTE: Does not update the allowance if the current allowance
+     * is the maximum `uint256`.
+     *
+     * Requirements:
+     *
+     * - `from` and `to` cannot be the zero address.
+     * - `from` must have a balance of at least `amount`.
+     * - the caller must have allowance for ``from``'s tokens of at least
+     * `amount`.
+     */
+  function transferFrom(
+    address from,
+    address to,
+    uint256 amount
+  ) public virtual override returns (bool) {
+    address spender = _msgSender();
+    _spendAllowance(from, spender, amount);
+    _transfer(from, to, amount);
+    return true;
+  }
+
+  /**
+   * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     */
+  function increaseAllowance(
+    address spender,
+    uint256 addedValue
+  ) public virtual returns (bool) {
+    address owner = _msgSender();
+    _approve(owner, spender, allowance(owner, spender) + addedValue);
+    return true;
+  }
+
+  /**
+   * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * This is an alternative to {approve} that can be used as a mitigation for
+     * problems described in {IERC20-approve}.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
+     *
+     * Requirements:
+     *
+     * - `spender` cannot be the zero address.
+     * - `spender` must have allowance for the caller of at least
+     * `subtractedValue`.
+     */
+  function decreaseAllowance(
+    address spender,
+    uint256 subtractedValue
+  ) public virtual returns (bool) {
+    address owner = _msgSender();
+    uint256 currentAllowance = allowance(owner, spender);
+    require(
+      currentAllowance >= subtractedValue,
+      "ERC20: decreased allowance below zero"
+    );
+  unchecked {
+    _approve(owner, spender, currentAllowance - subtractedValue);
+  }
+
+    return true;
+  }
+
+  /**
+   * @dev Moves `amount` of tokens from `from` to `to`.
      *
      * This internal function is equivalent to {transfer}, and can be used to
      * e.g. implement automatic token fees, slashing mechanisms, etc.
@@ -263,80 +355,213 @@ contract ERC7660 is Context,IERC20, IERC20Metadata,Ownable {
      * - `to` cannot be the zero address.
      * - `from` must have a balance of at least `amount`.
      */
- function _transfer(address from, address to, uint256 amount) internal virtual {
-  require(from != address(0), "ERC-20: transfer from the zero address");
-  require(to != address(0), "ERC-20: transfer to the zero address");
+  function _transfer(address from, address to, uint256 amount) internal virtual {
+    require(from != address(0), "ERC20: transfer from the zero address");
+    require(to != address(0), "ERC20: transfer to the zero address");
 
-  _beforeTokenTransfer(from, to, amount);
-  _handleTokenTransfer(from, to, amount);
-  emit Transfer(from, to, amount);
-  _afterTokenTransfer(from, to, amount);
- }
+    _beforeTokenTransfer(from, to, amount);
+    _handleTokenTransfer(from, to, amount);
+    _afterTokenTransfer(from, to, amount);
+    emit Transfer(from, to, amount);
+  }
 
- function _handleTokenTransfer(address from, address to, uint256 amount,uint256 toAmount) internal virtual {
-  claimRelease(from);
-  uint256 fromBalance = _Owned[from];
-  require(fromBalance >= amount, "ERC-20: transfer amount exceeds balance");
- unchecked {
-  _Owned[from] = fromBalance - amount;
- }
-  //update to vestInfo
-  if (!_isExcludedVest[to]) {
-   claimRelease(to);
-   uint startTime = block.timestamp / period * period;
-   uint pos = vestCursor[to];
-   VestInfo storage toInfo = userVestInfo[to][pos];
-   if (toInfo.startTime != startTime) {
-    if (pos == 6) {
-     pos = 0;
-    } else {
-     ++pos;
+
+
+  /**
+   * @dev Sets `amount` as the allowance of `spender` over the `owner` s tokens.
+     *
+     * This internal function is equivalent to `approve`, and can be used to
+     * e.g. set automatic allowances for certain subsystems, etc.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     */
+  function _approve(
+    address owner,
+    address spender,
+    uint256 amount
+  ) internal virtual {
+    require(owner != address(0), "ERC20: approve from the zero address");
+    require(spender != address(0), "ERC20: approve to the zero address");
+
+    _allowances[owner][spender] = amount;
+    emit Approval(owner, spender, amount);
+  }
+
+  /**
+   * @dev Updates `owner` s allowance for `spender` based on spent `amount`.
+     *
+     * Does not update the allowance amount in case of infinite allowance.
+     * Revert if not enough allowance is available.
+     *
+     * Might emit an {Approval} event.
+     */
+  function _spendAllowance(
+    address owner,
+    address spender,
+    uint256 amount
+  ) internal virtual {
+    uint256 currentAllowance = allowance(owner, spender);
+    if (currentAllowance != type(uint256).max) {
+      require(
+        currentAllowance >= amount,
+        "ERC20: insufficient allowance"
+      );
+    unchecked {
+      _approve(owner, spender, currentAllowance - amount);
     }
-    toInfo = userVestInfo[to][pos];
-    toInfo.total = toAmount;
-    toInfo.released = 0;
-    toInfo.startTime = uint128(startTime);
-    vestCursor[to] = pos;
-   } else {
-    toInfo.total += toAmount;
-   }
-   toInfo.updateTime = uint128(block.timestamp);
-  } else {
-   if(_isSwapRouter[to]){
-    _Owned[to] += amount;
-   }else{
-    _Owned[to] += toAmount;
-   }
-  }
- }
-
- function claimRelease(address account) public {
-  uint canReleaseTotal;
-  for (uint i = 0; i < 7; i++) {
-   VestInfo storage info = userVestInfo[account][i];
-   if (info.startTime == 0 || block.timestamp <= info.startTime || info.total == info.released) {
-    continue;
-   }
-   uint canRelease;
-   if (uint128(block.timestamp) >= info.startTime + duration) {
-    canRelease = info.total - info.released;
-   } else {
-    uint temp = info.total * (block.timestamp - info.startTime) / duration;
-    canRelease = temp - info.released;
-   }
-   canReleaseTotal += canRelease;
-   info.released += canRelease;
+    }
   }
 
-  if (canReleaseTotal > 0) {
-   _Owned[account] += canReleaseTotal;
+  /**
+   * @dev Hook that is called before any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * will be transferred to `to`.
+     * - when `from` is zero, `amount` tokens will be minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+  function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual {
+
   }
- }
+
+  function getCanReleaseInfo(address account) internal view returns (uint256 total, uint256 canRelease, uint256 released) {
+    for (uint i = 0; i < 7; i++) {
+      VestInfo memory info = userVestInfo[account][i];
+      if (info.startTime == 0) {
+        continue;
+      }
+      released += info.released;
+      total += info.total;
+      if (block.timestamp <= info.updateTime) {
+        canRelease += total;
+      } else if (uint128(block.timestamp) >= info.startTime + duration) {
+        canRelease += info.total - info.released;
+      } else {
+        uint temp = info.total * (block.timestamp - info.startTime) / duration;
+        canRelease += temp - info.released;
+      }
+    }
+  }
+
+  function claimRelease(address account) private {
+    uint canReleaseTotal;
+    for (uint i = 0; i < 7; i++) {
+      VestInfo storage info = userVestInfo[account][i];
+      if (info.startTime == 0 || block.timestamp <= info.startTime || info.total == info.released) {
+        continue;
+      }
+      uint canRelease;
+      if (uint128(block.timestamp) >= info.startTime + duration) {
+        canRelease = info.total - info.released;
+      } else {
+        uint temp = info.total * (block.timestamp - info.startTime) / duration;
+        canRelease = temp - info.released;
+      }
+      canReleaseTotal += canRelease;
+      info.released += canRelease;
+    }
+
+    if (canReleaseTotal > 0) {
+      _balances[account] += canReleaseTotal;
+    }
+  }
+
+  function _handleTokenTransfer(address from, address to, uint256 amount) internal virtual {
+    claimRelease(from);
+    uint256 fromBalance = _balances[from];
+    require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
+  unchecked {
+    _balances[from] = fromBalance - amount;
+  }
+    uint side = 0;
+    if (isPair(from) && !isRouter(to)){
+      claimRelease(to);
+      side = 1 ; //buy
+      uint startTime = block.timestamp / period * period;
+      uint pos = vestCursor[to];
+      VestInfo storage toInfo = userVestInfo[to][pos];
+      if (toInfo.startTime != startTime) {
+        if (pos == 6) {
+          pos = 0;
+        } else {
+          ++pos;
+        }
+        toInfo = userVestInfo[to][pos];
+        toInfo.total = amount;
+        toInfo.released = 0;
+        toInfo.startTime = uint32(startTime);
+        vestCursor[to] = pos;
+      } else {
+        toInfo.total += amount;
+      }
+      toInfo.updateTime = uint32(block.timestamp);
+
+    } else {
+      if(isPair(to)){
+        side = 2; //selll
+      }else{
+        side = 3; //other
+      }
+      _balances[to] += amount;
+    }
+    emit Trade(from,to,side,amount);
+  }
 
 
+  function addPair(address _pair,bool flag) public onlyOwner {
+    require(_pair != address(0), "pair is zero address");
+    _pairs[_pair] = flag;
+    emit AddPair(msg.sender,_pair,flag);
+  }
+  //_routers
+  function addRouter(address _router,bool flag) public onlyOwner {
+    require(_router != address(0), "router is zero address");
+    _routers[_router] = flag;
+    emit AddRouter(msg.sender,_router,flag);
+  }
 
+  function isPair(address _pair) public view returns (bool) {
+    return _pairs[_pair];
+  }
+  function isRouter(address _router) public view returns (bool) {
+    return _routers[_router];
+  }
+
+  function getDurationAndPeriod() public view returns(uint256,uint256){
+    return (duration,period);
+  }
+
+  /**
+   * @dev Hook that is called after any transfer of tokens. This includes
+     * minting and burning.
+     *
+     * Calling conditions:
+     *
+     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * has been transferred to `to`.
+     * - when `from` is zero, `amount` tokens have been minted for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens have been burned.
+     * - `from` and `to` are never both zero.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+  function _afterTokenTransfer(
+    address from,
+    address to,
+    uint256 amount
+  ) internal virtual {}
 }
-
 ```
 
 ## Security Considerations

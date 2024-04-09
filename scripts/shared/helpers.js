@@ -29,15 +29,7 @@ const {
   AVAX_DEPLOY_KEY,
 } = require("../../env.json");
 
-// const providers = {
-//   arbitrum: new ethers.providers.JsonRpcProvider(ARBITRUM_URL),
-//   avax: new ethers.providers.JsonRpcProvider(AVAX_URL),
-// };
-//
-// const signers = {
-//   arbitrum: new ethers.Wallet(ARBITRUM_DEPLOY_KEY).connect(providers.arbitrum),
-//   avax: new ethers.Wallet(ARBITRUM_DEPLOY_KEY).connect(providers.avax),
-// };
+
 
 const readCsv = async (file) => {
   records = [];

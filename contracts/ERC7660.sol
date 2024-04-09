@@ -538,7 +538,7 @@ contract ERC7660 is IERC20, IERC20Metadata,Ownable {
                 canRelease += info.total - info.released;
             } else {
                 uint temp = info.total * (block.timestamp - info.startTime) / duration;
-                canRelease = temp - info.released;
+                canRelease += temp - info.released;
             }
         }
     }

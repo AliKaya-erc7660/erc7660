@@ -9,7 +9,8 @@ const {
   ARBITRUM_DEPLOY_KEY,
   AVAX_URL,
   AVAX_DEPLOY_KEY,
-} = require("/etc/encrypt/env.json");
+}  = require("../../env.json");
+
 
 async function getTransferItems(keepers, provider) {
   const transferItems = [];

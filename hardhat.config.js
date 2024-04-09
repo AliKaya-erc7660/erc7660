@@ -7,13 +7,6 @@ require('hardhat-contract-sizer');
 require('@typechain/hardhat');
 
 const {
-  // BSC_URL,
-  // BSC_DEPLOY_KEY,
-  // BSCSCAN_API_KEY,
-  // POLYGONSCAN_API_KEY,
-  // SNOWTRACE_API_KEY,
-  // ARBISCAN_API_KEY,
-  // ETHERSCAN_API_KEY,
   BSC_TESTNET_URL,
   BSC_TESTNET_DEPLOY_KEY,
   BSC_TESTNET_USER0_KEY,
@@ -41,24 +34,10 @@ const {
   Blast_MAINNET_URL,
   Blast_MAINNET_DEPLOY_KEY,
   Blast_MAINNET_PROXY_ADMIN_KEY
-  // ARBITRUM_TESTNET_URL,
-  // ARBITRUM_DEPLOY_KEY,
-  //ARBITRUM_URL,
-  //AVAX_DEPLOY_KEY,
-  //AVAX_URL,
-  // POLYGON_DEPLOY_KEY,
-  // POLYGON_URL,
-  // MAINNET_URL,
-  // MAINNET_DEPLOY_KEY
 } = require("./env.json")
-//} = require("/etc/encrypt/env_blastxdx.json")
- //} = require("/etc/encrypt/env_l7dex.json")
 
 
-// console.log(ARBITRUM_TESTNET_URL)
-// console.log(ARBITRUM_TESTNET_DEPLOY_KEY)
-// console.log(ETH_MAINNET_URL);
-// This is a sample Hardhat task. To learn how to create your own go to
+
 // https://hardhat.org/guides/create-task.html
 task('accounts', 'Prints the list of accounts', async () => {
   const accounts = await ethers.getSigners();
@@ -107,21 +86,6 @@ module.exports = {
       chainId: 56,
       accounts: [BSC_MAINNET_DEPLOY_KEY]
     },
-    // BSCTestnet: {
-    //   url: BSC_TESTNET_URL,
-    //   chainId: 97,
-    //   accounts: [BSC_TESTNET_DEPLOY_KEY,BSC_TESTNET_USER0_KEY]
-    // },
-    arbitrumTestnet: {
-      url: 'https://goerli-rollup.arbitrum.io/rpc',
-      chainId: 421613,
-      accounts: [ARBITRUM_TESTNET_DEPLOY_KEY],
-    }, //
-    arbitrumTestnet1: {
-      url: 'https://endpoints.omniatech.io/v1/arbitrum/goerli/public',
-      chainId: 421613,
-      accounts: [ARBITRUM_TESTNET_DEPLOY_KEY],
-    },
     arbitrumMainNet: {
       url: ARBITRUM_MAINNET_URL,
       chainId: 42161,
@@ -132,16 +96,12 @@ module.exports = {
       chainId: 42161,
       accounts: [ARBITRUM_MAINNET_TEST_DEPLOY_KEY],
     },
-    // BaseMainNet: {
-    //   url: BASE_MAINNET_URL,
-    //   chainId: 8453,
-    //   accounts: [BASE_MAINNET_DEPLOY_KEY],
-    // },
-    // opBNBMainNet: {
-    //   url: opBNB_MAINNET_URL,
-    //   chainId: 204,
-    //   accounts: [opBNB_MAINNET_DEPLOY_KEY],
-    // },
+    BaseMainNet: {
+      url: BASE_MAINNET_URL,
+      chainId: 8453,
+      accounts: [BASE_MAINNET_DEPLOY_KEY],
+    },
+
     ETHMainNet: {
       url: ETH_MAINNET_URL,
       chainId: 1,
@@ -152,47 +112,13 @@ module.exports = {
       chainId: 5,
       accounts: [ETH_TESTNET_DEPLOY_KEY,ETH_TESTNET_PROXY_ADMIN_KEY],
     },
-    // BlastMainPre: {
-    //   url: Blast_MAINNET_URL,
-    //   chainId: 81457,
-    //   accounts: [Blast_MAINNET_DEPLOY_KEY,Blast_MAINNET_PROXY_ADMIN_KEY],
-    // },
-    // BlastMain: {
-    //   url: Blast_MAINNET_URL,
-    //   chainId: 81457,
-    //   accounts: [Blast_MAINNET_DEPLOY_KEY,Blast_MAINNET_PROXY_ADMIN_KEY],
-    // },
+
     BlastSepolia: {
       url: BlastSepolia_TESTNET_URL,
       chainId: 168587773,
       accounts: [BlastSepolia_TESTNET_DEPLOY_KEY,BlastSepolia_TESTNET_PROXY_ADMIN_KEY],
     },
-    // avax: {
-    //   url: AVAX_URL,
-    //   gasPrice: 200000000000,
-    //   chainId: 43114,
-    //   accounts: [AVAX_DEPLOY_KEY],
-    // },
-    //   polygon: {
-    //     url: POLYGON_URL,
-    //     gasPrice: 100000000000,
-    //     chainId: 137,
-    //     accounts: [POLYGON_DEPLOY_KEY]
-    //   },
-    //   mainnet: {
-    //     url: MAINNET_URL,
-    //     gasPrice: 50000000000,
-    //     accounts: [MAINNET_DEPLOY_KEY]
-    //   }
-    // },
-    //   etherscan: {
-    //     apiKey: {
-    //       mainnet: MAINNET_DEPLOY_KEY,
-    //       arbitrumOne: ARBISCAN_API_KEY,
-    //       avalanche: SNOWTRACE_API_KEY,
-    //       bsc: BSCSCAN_API_KEY,
-    //       polygon: POLYGONSCAN_API_KEY,
-    //     }
+
   },
   etherscan: {
     apiKey: {
@@ -201,7 +127,7 @@ module.exports = {
   },
   //version: '0.8.17',
   solidity: {
-    compilers: [    //可指定多个sol版本
+    compilers: [
       {version: "0.8.17"},
       {version: "0.8.20"}
     ],
